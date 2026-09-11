@@ -15,9 +15,19 @@ scene.add(lights[2]);
 const potLights = [new THREE.CylinderGeometry(0.1, 0.1, 0.5, 32), new THREE.MeshStandardMaterial({ color: 0xffff00, metalness: 1, roughness: 0.5 })];   
 const geometry = new THREE.BoxGeometry();
 const material = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.5 });
-const cube = new THREE.Mesh(geometry, material);
+const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.5 }));
+const objects = [];
+objects.push(cube);
 scene.add(cube);
 let keys = []
+objects.addEventListener('push', (e) => {
+    scene.add(e.detail);
+});
+document.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
 document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
 });
@@ -38,11 +48,18 @@ document.addEventListener('mousemove', (e) => {
 let sens = 5;
 function animate() {
     requestAnimationFrame(animate);
-    if (keys['w']) {
-        camera.position.add(new THREE.Vector3(0, 0, -0.1).applyQuaternion(camera.quaternion));
+    //make the w and s keys move the camera on the x and z axes only at a fixed speed
+    if(keys['w']) {
+        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        direction.y = 0;
+        direction.normalize();
+        camera.position.add(direction.multiplyScalar(0.1));
     }
     if(keys['s']) {
-        camera.position.add(new THREE.Vector3(0, 0, 0.1).applyQuaternion(camera.quaternion));
+        const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+        direction.y = 0;
+        direction.normalize();
+        camera.position.add(direction.multiplyScalar(0.1));
     }
     if(keys['a']) {
         camera.position.add(new THREE.Vector3(-0.1, 0, 0).applyQuaternion(camera.quaternion));
@@ -50,12 +67,7 @@ function animate() {
     if(keys['d']) {
         camera.position.add(new THREE.Vector3(0.1, 0, 0).applyQuaternion(camera.quaternion));
     }
-    if(keys['q']) {
-        camera.position.add(new THREE.Vector3(0, -0.1, 0).applyQuaternion(camera.quaternion));
-    }
-    if(keys['e']) {
-        camera.position.add(new THREE.Vector3(0, 0.1, 0).applyQuaternion(camera.quaternion));
-    }
+    camera.position.y = 1.6;
     renderer.render(scene, camera);
 }
 animate();
