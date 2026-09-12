@@ -15,8 +15,10 @@ function resizeRenderer() {
 resizeRenderer();
 document.body.appendChild(renderer.domElement);
 scene.background = new THREE.Color(0x222222);
-const lights = [new THREE.AmbientLight(0x404040)];
-scene.add(lights[0]);
+const lights = [new THREE.AmbientLight(0x404040), new THREE.DirectionalLight(0xffffff, 1)];
+lights.forEach(element => {
+    scene.add(element)
+});
 const potLights = [];
 const objects = [];
 const ghosts = [];
@@ -54,12 +56,12 @@ function createDoorMesh(material) {
     const topY = camera.position.y - 0.6;
     const frameGeo = new THREE.Mesh(rot ? new THREE.BoxGeometry(0.5, 3, sideDepth) : new THREE.BoxGeometry(sideDepth, 3, 0.5), material);
     const leftFrame = frameGeo.clone();
-    leftFrame.position.set(-(width + 1.5) / 4, sideY, 0);
+    leftFrame.position.set(rot ? 0 : -(width + 1.5) / 4, sideY, rot ? -(width + 1.5) / 4 : 0);
 
     const rightFrame = frameGeo.clone();
-    rightFrame.position.set((width + 1.5) / 4, sideY, 0);
+    rightFrame.position.set(rot ? 0 : (width + 1.5) / 4, sideY, rot ? (width + 1.5) / 4 : 0);
 
-    const topBeam = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.5), material);
+    const topBeam = new THREE.Mesh(new THREE.BoxGeometry(!rot ? 1 : 0.5, 1, !rot ? 0.5 : 1), material);
     topBeam.position.set(0, topY, 0);
 
     door.add(leftFrame, rightFrame, topBeam);
@@ -74,7 +76,7 @@ function getPlacementPosition(targetObj = obj) {
 
     const distance = 3 * Math.cos(camera.rotation.x);
     const position = camera.position.clone().addScaledVector(forward, distance);
-    const y = targetObj === 'light' ? camera.position.y + 1.39 : targetObj === 'floor' ? camera.position.y - 1.6 : targetObj === 'ceiling' ? camera.position.y + 1.6 : targetObj === 'door' ? camera.position.y - 0.1 : targetObj === 'window' ? camera.position.y - 0.1 : targetObj === 'furniture' ? camera.position.y - 1.1 : targetObj === 'decoration' ? (camera.position.y - 1.1/*needs to be dependent on the furniture */) : camera.position.y - 0.1;
+    const y = targetObj === 'light' ? camera.position.y + 1.29 : targetObj === 'floor' ? camera.position.y - 1.6 : targetObj === 'ceiling' ? camera.position.y + 1.6 : targetObj === 'door' ? camera.position.y - 0.1 : targetObj === 'window' ? camera.position.y - 0.1 : targetObj === 'furniture' ? camera.position.y - 1.1 : targetObj === 'decoration' ? (camera.position.y - 1.1/*needs to be dependent on the furniture */) : camera.position.y - 0.1;
 
     return new THREE.Vector3(
         Math.round(position.x),
@@ -227,6 +229,7 @@ window.addEventListener('resize', resizeRenderer);
 let keys = []
 let rot = false;
 let toggle = false;
+let hue = 1
 let furnituret = 0
 let decorationt = 0
 document.addEventListener('keydown', (e) => {
@@ -289,9 +292,15 @@ document.addEventListener('keydown', (e) => {
         }
     }
     if(e.key == 'l') {
-        let i = colour2.hexToHsl(colour2.getHex())
-        //change the saturation to 0
-        
+        if (hue == 1) {
+            const [h, s, v] = hexToHsl(colour2);
+            hue = 0;
+            colour2 = hslToHex(h, 0, v);
+        } else {
+            const [h,s,v] = hexToHsl(colour2)
+            hue = 1
+            colour2 = hslToHex(h, 100, v)
+        }
     }
 });
 document.addEventListener('keyup', (e) => {
@@ -451,9 +460,15 @@ document.addEventListener('mousemove', (e) => {
 let state = 1
 document.addEventListener('wheel', (e) => {
     const [h, s, l] = hexToHsl(colour2);
-    const step = 3;
-    const newHue = (h + (e.deltaY < 0? step : -step) + 360) % 360;
-    colour2 = hslToHex(newHue, s, l);
+    if (hue == 1) {
+        const step = 3;
+        const newHue = (h + (e.deltaY < 0 ? step : -step) + 360) % 360;
+        colour2 = hslToHex(newHue, s, l);
+    } else {
+        const step = 3;
+        const newLevel = (l + (e.deltaY < 0 ? step : -step) + 100) % 100;
+        colour2 = hslToHex(h, 0, newLevel);
+    }
 });
 let sens = 5;
 function animate() {
