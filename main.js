@@ -89,7 +89,11 @@ document.addEventListener('keyup', (e) => {
 });
 document.addEventListener('click', () => {
     document.body.requestPointerLock();
+    if (toggle) {
+
+    }
 });
+document.addEventListener('rightclick', () => {/*huzzah im addin smt here later */});
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === document.body) {
         camera.rotation.order = 'YXZ';
