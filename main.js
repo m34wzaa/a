@@ -1,10 +1,12 @@
-import * as THREE from './node_modules/three/build/three.module.js'
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
 camera.position.z = 5;
 const renderer = new THREE.WebGLRenderer();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.sortObjects = true;
+renderer.sortObjects = false;
 function resizeRenderer() {
     const width2 = window.innerWidth;
     const height = window.innerHeight;
@@ -15,7 +17,14 @@ function resizeRenderer() {
 resizeRenderer();
 document.body.appendChild(renderer.domElement);
 scene.background = new THREE.Color(0x222222);
-const lights = [new THREE.AmbientLight(0x404040), new THREE.DirectionalLight(0xffffff, 1)];
+const spotlight = new THREE.SpotLight(0xffffff, 1, 25, Math.PI / 6, 0.45, 1);
+spotlight.position.set(0, 5, 0);
+spotlight.target.position.set(0, 0, 0);
+scene.add(spotlight.target);
+
+const lights = [new THREE.AmbientLight(0x404040), new THREE.DirectionalLight(0xffffff, 0.5)];
+lights[1].position.set(5, 10, 7.5);
+lights[1].target.position.set(0, 0, 0);
 lights.forEach(element => {
     scene.add(element)
 });
@@ -63,11 +72,39 @@ function createDoorMesh(material) {
 
     const topBeam = new THREE.Mesh(new THREE.BoxGeometry(!rot ? 1 : 0.5, 1, !rot ? 0.5 : 1), material);
     topBeam.position.set(0, topY, 0);
-
-    door.add(leftFrame, rightFrame, topBeam);
+    if (width > 1) {
+        door.add(leftFrame, rightFrame);
+    }
+    door.add(topBeam);
     door.userData.deletePreview = false;
     door.userData.baseColor = material && material.color ? material.color.getHex() : colour2;
     return door;
+}
+function createWindowMesh(material) {
+    const window = new THREE.Group();
+    const sideDepth = (width - 0.5) / 2;
+    const sideY = camera.position.y - 1.6;
+    const topY = camera.position.y - 0.6;
+    const bottomY = camera.position.y - 2.6;
+    const frameGeo = new THREE.Mesh(rot ? new THREE.BoxGeometry(0.5, 3, sideDepth) : new THREE.BoxGeometry(sideDepth, 3, 0.5), material);
+    const leftFrame = frameGeo.clone();
+    leftFrame.position.set(rot ? 0 : -(width + 1.5) / 4, sideY, rot ? -(width + 1.5) / 4 : 0);
+
+    const rightFrame = frameGeo.clone();
+    rightFrame.position.set(rot ? 0 : (width + 1.5) / 4, sideY, rot ? (width + 1.5) / 4 : 0);
+
+    const topBeam = new THREE.Mesh(new THREE.BoxGeometry(!rot ? 1 : 0.5, 1, !rot ? 0.5 : 1), material);
+    topBeam.position.set(0, topY, 0);
+
+    const botBeam = new THREE.Mesh(new THREE.BoxGeometry(!rot ? 1 : 0.5, 1, !rot ? 0.5 : 1), material);
+    botBeam.position.set(0, bottomY, 0);
+    if (width > 1) {
+        window.add(leftFrame, rightFrame);
+    }
+    window.add(topBeam, botBeam);
+    window.userData.deletePreview = false;
+    window.userData.baseColor = material && material.color ? material.color.getHex() : colour2;
+    return window;
 }
 function getPlacementPosition(targetObj = obj) {
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -120,7 +157,155 @@ function setWallColour(object, hex) {
         object.material.color.setHex(hex);
     }
 }
+function createFallbackFurnitureMesh(material) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), material || new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    group.add(body);
+    return group;
+}
 
+function loadFurnitureModel(url, material, fallbackSize = [0.8, 0.8, 0.8]) {
+    const fallback = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(...fallbackSize), material || new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    box.position.y = 0.4;
+    fallback.add(box);
+
+    const loader = new GLTFLoader();
+    loader.load(
+        url,
+        (gltf) => {
+            const model = gltf.scene;
+            model.traverse((child) => {
+                if (child.isMesh && material) {
+                    child.material = material;
+                }
+            });
+            model.rotation.y = furnitureRot * (Math.PI / 2);
+            model.position.set(0, 0, 0);
+            model.scale.setScalar(1);
+            return model;
+        },
+        undefined,
+        (error) => {
+            console.error(`Failed to load model: ${url}`, error);
+            fallback.visible = true;
+        }
+    );
+
+    return fallback;
+}
+
+function makeFurnitureMesh(type, mat) {
+    if (type === 'chair') {
+        console.log('making chair mesh');
+        const fallback = createFallbackFurnitureMesh(mat);
+        const loader = new GLTFLoader();
+        loader.load(
+            './models/chair.glb',
+            (gltf) => {
+                const chair = gltf.scene;
+                chair.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = mat;
+                    }
+                });
+                chair.scale.set(1, 1, 1);
+                chair.rotation.y = furnitureRot * (Math.PI / 2);
+                chair.position.set(0, 0, 0);
+                scene.add(chair);
+            },
+            undefined,
+            (error) => {
+                console.error('Failed to load chair.glb:', error);
+                scene.add(fallback);
+            }
+        );
+        return fallback;
+    }
+    if (type === 'table') {
+        console.log('making table mesh');
+        const fallback = createFallbackFurnitureMesh(mat);
+        const loader = new GLTFLoader();
+        loader.load(
+            './models/table.glb',
+            (gltf) => {
+                const table = gltf.scene;
+                table.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = mat;
+                    }
+                });
+                table.scale.set(1, 1, 1);
+                table.rotation.y = furnitureRot * (Math.PI / 2);
+                table.position.set(0, 0, 0);
+                scene.add(table);
+            },
+            undefined,
+            (error) => {
+                console.error('Failed to load table.glb:', error);
+                scene.add(fallback);
+            }
+        );
+        return fallback;
+    }
+    if (type === 'sofa') {
+        console.log('making sofa mesh');
+    }
+    if (type === 'bed') {
+        console.log('making bed mesh');
+    }
+    if (type === 'cabinet') {
+        console.log('making cabinet mesh');
+    }
+    if (type === 'shelf') {
+        console.log('making shelf mesh');
+    }
+    if (type === 'desk') {
+        console.log('making desk mesh');
+    }
+    if (type === 'lamp') {
+        console.log('making lamp mesh');
+    }
+    if (type === 'rug') {
+        console.log('making rug mesh');
+    }
+    if (type === 'piano') {
+        console.log('making piano mesh');
+    }
+    if (type === 'wardrobe') {
+        console.log('making wardrobe mesh');
+    }
+    if (type === 'bookshelf') {
+        console.log('making bookshelf mesh');
+    }
+    if (type === 'stool') {
+        console.log('making stool mesh');
+    }
+    if (type === 'bench') {
+        console.log('making bench mesh');
+    }
+    return createFallbackFurnitureMesh(mat);
+}
+function makeDecorationMesh(type, mat) {
+    const deco = new THREE.Group();
+    if (type === 'poster') {
+        console.log('making poster mesh');
+    }
+    if (type === 'clock') {
+        console.log('making clock mesh');
+    }
+    if (type === 'vase') {
+        console.log('making vase mesh');
+    }
+    if (type === 'candle') {
+        console.log('making candle mesh');
+    }
+    if (type === 'curtain') {
+        console.log('making curtain mesh');
+    }
+    deco.rotation.y = furnitureRot * (Math.PI / 2);
+    return deco;
+}
 function ghostObject() {
     if (obj === 'wall') {
         const pos = getPlacementPosition('wall');
@@ -131,7 +316,7 @@ function ghostObject() {
         const ghost = new THREE.Mesh(getWallGeometry(), ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
-        ghost.renderOrder = objects.length + 1;
+        
         scene.add(ghost);
     }
     if (obj === 'light') {
@@ -142,6 +327,7 @@ function ghostObject() {
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), ghostMaterial);
         ghost.position.copy(pos);
+        ghost.material.depthTest = false;
         ghosts.push(ghost);
         scene.add(ghost);
     }
@@ -154,7 +340,7 @@ function ghostObject() {
         const ghost = new THREE.Mesh(getFloorGeometry(), ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
-        ghost.renderOrder = objects.length + 1;
+        
         scene.add(ghost);
     }
     if (obj === 'ceiling') {
@@ -166,7 +352,7 @@ function ghostObject() {
         const ghost = new THREE.Mesh(getCeilingGeometry(), ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
-        ghost.renderOrder = objects.length + 1;
+        
         scene.add(ghost);
     }
     if (obj === 'door') {
@@ -178,9 +364,41 @@ function ghostObject() {
         const ghost = createDoorMesh(ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
-        ghost.renderOrder = objects.length + 1;
+        
         scene.add(ghost);
     }
+    if (obj === 'window') {
+        const pos = getPlacementPosition('window');
+        if (objectExistsAt(pos)) return;
+
+        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        ghostMaterial.depthWrite = false;
+        const ghost = createWindowMesh(ghostMaterial);
+        ghost.position.copy(pos);
+        ghosts.push(ghost);
+        
+        scene.add(ghost);
+    }
+    if (obj === 'furniture') {
+        const pos = getPlacementPosition('furniture');
+        if (objectExistsAt(pos)) return;
+        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghost = makeFurnitureMesh(furnitures[furnituret], ghostMaterial);
+        ghost.position.copy(pos);
+        ghosts.push(ghost);
+        
+        scene.add(ghost);
+    } else if (obj === 'decoration') {
+        const pos = getPlacementPosition('decoration');
+        if (objectExistsAt(pos)) return;
+        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghost = makeDecorationMesh(decorations[decorationt], ghostMaterial);
+        ghost.position.copy(pos);
+        ghosts.push(ghost);
+        
+        scene.add(ghost);
+    }
+
 }
 function colour(hex) {
     return new THREE.MeshStandardMaterial({ color: hex, metalness: 0.5, roughness: 1 });
@@ -218,7 +436,7 @@ function addObjects(x, y, z, xsize, ysize, zsize, mat) {
     scene.add(object);
 }
 lights.forEach(light => {
-    if (light instanceof THREE.DirectionalLight) {
+    if (light instanceof THREE.SpotLight) {
         const potLight = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), lightColour(0xffffff));
         potLight.position.copy(light.position);
         scene.add(potLight);
@@ -228,6 +446,7 @@ lights.forEach(light => {
 window.addEventListener('resize', resizeRenderer);
 let keys = []
 let rot = false;
+let furnitureRot = 0;
 let toggle = false;
 let hue = 1
 let furnituret = 0
@@ -235,7 +454,11 @@ let decorationt = 0
 document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
     if(e.key === 'r') {
-        rot = !rot;
+        if (obj === 'furniture' || obj === 'decoration') {
+            furnitureRot = (furnitureRot + 1) % 4;
+        } else {
+            rot = !rot;
+        }
     }
     if(e.key === ' ') {
         toggle = !toggle;
@@ -344,6 +567,7 @@ document.addEventListener('click', () => {
 
             const potLightMaterial = lightColour(colour3);
             potLightMaterial.depthWrite = false;
+            potLightMaterial.depthTest = false;
             const potLight = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), potLightMaterial);
             potLight.position.copy(pos);
             potLight.userData.baseColor = colour3;
@@ -436,12 +660,34 @@ document.addEventListener('click', () => {
             door.userData.baseColor = colour2;
             objects.push(door);
             scene.add(door);
-        } else if (obj === modes[5]/* window */) {} else if (obj === modes[6]/* furniture */) {} else if (obj === modes[7]/* decoration */) {} else if (obj === modes[8]/* delete */) {}
+        } else if (obj === modes[5]/* window */) {
+            const pos = getPlacementPosition('window');
+            const existing = findObjectAt(pos);
+
+            if (existing) {
+                if (existing.userData.deletePreview) {
+                    scene.remove(existing);
+                    const index = objects.indexOf(existing);
+                    if (index !== -1) objects.splice(index, 1);
+                    return;
+                }
+
+                setWallColour(existing, 0xff0000);
+                existing.userData.deletePreview = true;
+                return;
+            }
+
+            const windowMesh = createWindowMesh(new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1 }));
+            windowMesh.position.copy(pos);
+            windowMesh.userData.baseColor = colour2;
+            objects.push(windowMesh);
+            scene.add(windowMesh);
+        } else if (obj === modes[6]/* furniture */) {} else if (obj === modes[7]/* decoration */) {} else if (obj === modes[8]/* delete */) {} else if (obj === modes[9]/* colourpicker */) {}
     }
 });
-let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'furniture', 'decoration', 'delete'];
-let furnitures = ['chair', 'table', 'sofa', 'bed', 'cabinet', 'shelf', 'desk', 'lamp', 'rug'];
-let decorations = ['painting', 'poster', 'clock', 'plant', 'vase', 'statue', 'candle', 'curtain'];
+let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'furniture', 'decoration', 'delete', 'colourpicker'];
+let furnitures = ['chair', 'table', 'sofa', 'bed', 'cabinet', 'shelf', 'desk', 'lamp', 'rug', 'piano', 'wardrobe', 'bookshelf', 'stool', 'bench'];
+let decorations = ['poster', 'clock', 'vase', 'candle', 'curtain'];
 let time = Date.now();
 document.addEventListener('contextmenu', (e) => {
     e.preventDefault();
