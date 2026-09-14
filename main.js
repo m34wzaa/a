@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 30);
+const fog = new THREE.FogExp2(0x222222, 0.1)
+scene.fog = fog
 camera.position.z = 5;
 const renderer = new THREE.WebGLRenderer();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -113,7 +115,7 @@ function getPlacementPosition(targetObj = obj) {
 
     const distance = 3 * Math.cos(camera.rotation.x);
     const position = camera.position.clone().addScaledVector(forward, distance);
-    const y = targetObj === 'light' ? camera.position.y + 1.29 : targetObj === 'floor' ? camera.position.y - 1.6 : targetObj === 'ceiling' ? camera.position.y + 1.6 : targetObj === 'door' ? camera.position.y - 0.1 : targetObj === 'window' ? camera.position.y - 0.1 : targetObj === 'furniture' ? camera.position.y - 1.1 : targetObj === 'decoration' ? (camera.position.y - 1.1/*needs to be dependent on the furniture */) : camera.position.y - 0.1;
+    const y = targetObj === 'light' ? camera.position.y + 1.29 : targetObj === 'floor' ? camera.position.y - 1.75 : targetObj === 'ceiling' ? camera.position.y + 1.6 : targetObj === 'door' ? camera.position.y - 0.1 : targetObj === 'window' ? camera.position.y - 0.1 : targetObj === 'statics' ? camera.position.y - 1.1 : targetObj === 'motion' ? (camera.position.y - 1.1/*needs to be dependent on the statics and motions */) : camera.position.y - 0.1;
 
     return new THREE.Vector3(
         Math.round(position.x),
@@ -122,20 +124,37 @@ function getPlacementPosition(targetObj = obj) {
     );
 }
 
-function objectExistsAt(position) {
-    return objects.some((object) => (
-        Math.abs(object.position.x - position.x) < 0.001 &&
-        Math.abs(object.position.y - position.y) < 0.001 &&
-        Math.abs(object.position.z - position.z) < 0.001
-    ));
+function getObjectPlacementPoint(object) {
+    if (object && object.userData && object.userData.placementPos) {
+        return object.userData.placementPos;
+    }
+    return object.position;
 }
 
-function findObjectAt(position) {
-    return objects.find((object) => (
-        Math.abs(object.position.x - position.x) < 0.001 &&
-        Math.abs(object.position.y - position.y) < 0.001 &&
-        Math.abs(object.position.z - position.z) < 0.001
-    ));
+function objectExistsAt(position, yTolerance = 0.001) {
+    const hits = objects.filter((object) => {
+        const objectPos = getObjectPlacementPoint(object);
+        return (
+            Math.abs(objectPos.x - position.x) < 0.001 &&
+            Math.abs(objectPos.y - position.y) < yTolerance &&
+            Math.abs(objectPos.z - position.z) < 0.001
+        );
+    });
+
+    return hits.length > 0;
+}
+
+function findObjectAt(position, yTolerance = 0.5) {
+    const match = objects.find((object) => {
+        const objectPos = getObjectPlacementPoint(object);
+        return (
+            Math.abs(objectPos.x - position.x) < 0.001 &&
+            Math.abs(objectPos.y - position.y) < yTolerance &&
+            Math.abs(objectPos.z - position.z) < 0.001
+        );
+    });
+
+    return match;
 }
 
 function setWallColour(object, hex) {
@@ -157,18 +176,70 @@ function setWallColour(object, hex) {
         object.material.color.setHex(hex);
     }
 }
-function createFallbackFurnitureMesh(material) {
+
+const staticsLibrary = {};
+
+function createFallbackstaticsMesh(material, size = 0.8) {
     const group = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), material || new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(size, size, size),
+        material || new THREE.MeshStandardMaterial({ color: 0xffffff })
+    );
+    body.position.y = size / 2;
     group.add(body);
     return group;
 }
 
-function loadFurnitureModel(url, material, fallbackSize = [0.8, 0.8, 0.8]) {
-    const fallback = new THREE.Group();
-    const box = new THREE.Mesh(new THREE.BoxGeometry(...fallbackSize), material || new THREE.MeshStandardMaterial({ color: 0xffffff }));
-    box.position.y = 0.4;
-    fallback.add(box);
+function applyGhostMaterial(object, color) {
+    object.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const meshMaterial = child.material;
+        const material = Array.isArray(meshMaterial)
+            ? meshMaterial.map((entry) => {
+                if (!entry || !entry.color) return entry;
+                return new THREE.MeshStandardMaterial({
+                    color,
+                    emissive: color,
+                    emissiveIntensity: 0.15,
+                    transparent: true,
+                    opacity: 0.6,
+                    metalness: 0.2,
+                    roughness: 0.8,
+                    depthWrite: false,
+                });
+              })
+            : new THREE.MeshStandardMaterial({
+                color,
+                emissive: color,
+                emissiveIntensity: 0.15,
+                transparent: true,
+                opacity: 0.6,
+                metalness: 0.2,
+                roughness: 0.8,
+                depthWrite: false,
+              });
+
+        child.material = material;
+    });
+}
+
+function normalizestaticsScale(scale) {
+    if (typeof scale === 'number') {
+        return { x: scale, y: scale, z: scale };
+    }
+
+    return {
+        x: scale?.x ?? 1,
+        y: scale?.y ?? 1,
+        z: scale?.z ?? 1,
+    };
+}
+
+function preloadstaticsModel(type, url, scale = 1) {
+    if (staticsLibrary[type]) return;
+
+    const normalizedScale = normalizestaticsScale(scale);
 
     const loader = new GLTFLoader();
     loader.load(
@@ -176,136 +247,110 @@ function loadFurnitureModel(url, material, fallbackSize = [0.8, 0.8, 0.8]) {
         (gltf) => {
             const model = gltf.scene;
             model.traverse((child) => {
-                if (child.isMesh && material) {
-                    child.material = material;
+                if (child.isMesh) {
+                    child.frustumCulled = false;
                 }
             });
-            model.rotation.y = furnitureRot * (Math.PI / 2);
-            model.position.set(0, 0, 0);
-            model.scale.setScalar(1);
-            return model;
+
+            model.userData.scale = normalizedScale;
+            model.scale.set(normalizedScale.x, normalizedScale.y, normalizedScale.z);
+            staticsLibrary[type] = model;
         },
         undefined,
         (error) => {
-            console.error(`Failed to load model: ${url}`, error);
-            fallback.visible = true;
+            console.warn(`Could not preload ${type}:`, error);
+            const fallback = createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color: 0xffffff }), 0.8);
+            fallback.userData.scale = normalizedScale;
+            staticsLibrary[type] = fallback;
         }
     );
-
-    return fallback;
 }
 
-function makeFurnitureMesh(type, mat) {
-    if (type === 'chair') {
-        console.log('making chair mesh');
-        const fallback = createFallbackFurnitureMesh(mat);
-        const loader = new GLTFLoader();
-        loader.load(
-            './models/chair.glb',
-            (gltf) => {
-                const chair = gltf.scene;
-                chair.traverse((child) => {
-                    if (child.isMesh) {
-                        child.material = mat;
-                    }
-                });
-                chair.scale.set(1, 1, 1);
-                chair.rotation.y = furnitureRot * (Math.PI / 2);
-                chair.position.set(0, 0, 0);
-                scene.add(chair);
-            },
-            undefined,
-            (error) => {
-                console.error('Failed to load chair.glb:', error);
-                scene.add(fallback);
-            }
-        );
-        return fallback;
-    }
-    if (type === 'table') {
-        console.log('making table mesh');
-        const fallback = createFallbackFurnitureMesh(mat);
-        const loader = new GLTFLoader();
-        loader.load(
-            './models/table.glb',
-            (gltf) => {
-                const table = gltf.scene;
-                table.traverse((child) => {
-                    if (child.isMesh) {
-                        child.material = mat;
-                    }
-                });
-                table.scale.set(1, 1, 1);
-                table.rotation.y = furnitureRot * (Math.PI / 2);
-                table.position.set(0, 0, 0);
-                scene.add(table);
-            },
-            undefined,
-            (error) => {
-                console.error('Failed to load table.glb:', error);
-                scene.add(fallback);
-            }
-        );
-        return fallback;
-    }
-    if (type === 'sofa') {
-        console.log('making sofa mesh');
-    }
-    if (type === 'bed') {
-        console.log('making bed mesh');
-    }
-    if (type === 'cabinet') {
-        console.log('making cabinet mesh');
-    }
-    if (type === 'shelf') {
-        console.log('making shelf mesh');
-    }
-    if (type === 'desk') {
-        console.log('making desk mesh');
-    }
-    if (type === 'lamp') {
-        console.log('making lamp mesh');
-    }
-    if (type === 'rug') {
-        console.log('making rug mesh');
-    }
-    if (type === 'piano') {
-        console.log('making piano mesh');
-    }
-    if (type === 'wardrobe') {
-        console.log('making wardrobe mesh');
-    }
-    if (type === 'bookshelf') {
-        console.log('making bookshelf mesh');
-    }
-    if (type === 'stool') {
-        console.log('making stool mesh');
-    }
-    if (type === 'bench') {
-        console.log('making bench mesh');
-    }
-    return createFallbackFurnitureMesh(mat);
+function applystaticsMaterial(object, color, ghost = false) {
+    object.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const nextMaterial = new THREE.MeshStandardMaterial({
+            color,
+            emissive: ghost ? color : 0x000000,
+            emissiveIntensity: ghost ? 0.2 : 0,
+            transparent: ghost,
+            opacity: ghost ? 0.55 : 1,
+            metalness: 0.3,
+            roughness: 0.7,
+            depthWrite: !ghost,
+        });
+
+        child.material = nextMaterial;
+    });
 }
-function makeDecorationMesh(type, mat) {
+
+function clonestaticsModel(type, color, ghost = false) {
+    const template = staticsLibrary[type];
+    if (!template) return null;
+
+    const model = template.clone(true);
+    const scale = normalizestaticsScale(model.userData.scale ?? 1);
+    model.scale.set(scale.x, scale.y, scale.z);
+    applystaticsMaterial(model, color, ghost);
+    model.rotation.y = staticsRot * (Math.PI / 2);
+    return model;
+}
+
+function createstaticsGhost(type, color, position) {
+    const ghost = clonestaticsModel(type, color, true);
+    if (!ghost) {
+        return createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color }), 0.8);
+    }
+
+    ghost.position.copy(position);
+    ghost.userData.placementPos = position.clone();
+    ghost.userData.deletePreview = false;
+    ghost.userData.baseColor = color;
+    return ghost;
+}
+
+function makestaticsMesh(type, mat) {
+    const color = mat && mat.color ? mat.color.getHex() : 0xffffff;
+    const ghost = clonestaticsModel(type, color, true);
+    if (ghost) return ghost;
+    return createFallbackstaticsMesh(mat);
+}
+
+function createPlacedstatics(type, color) {
+    const model = clonestaticsModel(type, color, false);
+    if (model) return model;
+    return createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color }), type === 'table' ? 1.1 : 0.8);
+}
+function makemotionMesh(type, mat) {
     const deco = new THREE.Group();
-    if (type === 'poster') {
-        console.log('making poster mesh');
-    }
-    if (type === 'clock') {
-        console.log('making clock mesh');
-    }
-    if (type === 'vase') {
-        console.log('making vase mesh');
-    }
-    if (type === 'candle') {
-        console.log('making candle mesh');
-    }
-    if (type === 'curtain') {
-        console.log('making curtain mesh');
-    }
-    deco.rotation.y = furnitureRot * (Math.PI / 2);
+    deco.rotation.y = staticsRot * (Math.PI / 2);
     return deco;
 }
+const staticObjectYOffsets = Object.freeze({
+    chair: 0,
+    table: 0.2,
+    stair: -0.1,
+    bench: 0,
+    stool: 0,
+    rug: 0,
+    lamp: 0,
+    sofa: 0,
+    bed: 0,
+    cabinet: 0,
+    shelf: 0,
+    desk: 0,
+    piano: 0,
+    wardrobe: 0,
+    bookshelf: 0,
+});
+
+function getStaticObjectPosition(type, basePos) {
+    const pos = basePos.clone();
+    pos.y += staticObjectYOffsets[type] ?? 0;
+    return pos;
+}
+
 function ghostObject() {
     if (obj === 'wall') {
         const pos = getPlacementPosition('wall');
@@ -323,11 +368,11 @@ function ghostObject() {
         const pos = getPlacementPosition('light');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour3, metalness: 1, roughness: 0, emissive: colour3, emissiveIntensity: 1, transparent: true, opacity: 0.5 });
+        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour3, metalness: 1, roughness: 0, emissive: colour3, emissiveIntensity: 1, transparent: true, opacity: 0.5, depthTest: true });
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), ghostMaterial);
         ghost.position.copy(pos);
-        ghost.material.depthTest = false;
+        ghost.userData.lightGhost = true;
         ghosts.push(ghost);
         scene.add(ghost);
     }
@@ -379,20 +424,22 @@ function ghostObject() {
         
         scene.add(ghost);
     }
-    if (obj === 'furniture') {
-        const pos = getPlacementPosition('furniture');
-        if (objectExistsAt(pos)) return;
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
-        const ghost = makeFurnitureMesh(furnitures[furnituret], ghostMaterial);
-        ghost.position.copy(pos);
+    if (obj === 'statics') {
+        const type = statics[staticst];
+        const pos = getPlacementPosition('statics');
+        const adjustedPos = getStaticObjectPosition(type, pos);
+        if (objectExistsAt(adjustedPos)) return;
+
+        const ghost = createstaticsGhost(type, colour2, pos);
+        ghost.position.copy(adjustedPos);
+        ghost.userData.placementPos = adjustedPos.clone();
         ghosts.push(ghost);
-        
         scene.add(ghost);
-    } else if (obj === 'decoration') {
-        const pos = getPlacementPosition('decoration');
+    } else if (obj === 'motion') {
+        const pos = getPlacementPosition('motion');
         if (objectExistsAt(pos)) return;
         const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
-        const ghost = makeDecorationMesh(decorations[decorationt], ghostMaterial);
+        const ghost = makemotionMesh(motion[motiont], ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
         
@@ -427,8 +474,57 @@ function hslToHex(h, s, l) {
 }
 
 function lightColour(hex) {
-    return new THREE.MeshStandardMaterial({ color: hex, metalness: 1, roughness: 0, emissive: hex, emissiveIntensity: 1 });
+    return new THREE.MeshStandardMaterial({ color: hex, metalness: 1, roughness: 0, emissive: hex, emissiveIntensity: 1, depthTest: true, depthWrite: false });
 }
+
+function updatePotLightVisibility() {
+    potLights.forEach((potLight) => {
+        if (!potLight || !potLight.userData || !potLight.userData.light) {
+            return;
+        }
+
+        const lightPos = potLight.position.clone();
+        const cameraPos = camera.position.clone();
+        const direction = lightPos.sub(cameraPos);
+        const distance = direction.length();
+
+        if (distance < 0.0001) {
+            potLight.visible = true;
+            return;
+        }
+
+        direction.normalize();
+        const raycaster = new THREE.Raycaster(cameraPos, direction, 0, distance);
+        const intersects = raycaster.intersectObjects(objects, true);
+        const isBlocked = intersects.some((hit) => hit.object !== potLight && hit.distance < distance - 0.05);
+        potLight.visible = !isBlocked;
+    });
+}
+
+function updateGhostLightVisibility() {
+    ghosts.forEach((ghost) => {
+        if (!ghost || !ghost.userData || !ghost.userData.lightGhost) {
+            return;
+        }
+
+        const lightPos = ghost.position.clone();
+        const cameraPos = camera.position.clone();
+        const direction = lightPos.sub(cameraPos);
+        const distance = direction.length();
+
+        if (distance < 0.0001) {
+            ghost.visible = true;
+            return;
+        }
+
+        direction.normalize();
+        const raycaster = new THREE.Raycaster(cameraPos, direction, 0, distance);
+        const intersects = raycaster.intersectObjects(objects, true);
+        const isBlocked = intersects.some((hit) => hit.distance < distance - 0.05);
+        ghost.visible = !isBlocked;
+    });
+}
+
 function addObjects(x, y, z, xsize, ysize, zsize, mat) {
     const object = new THREE.Mesh(new THREE.BoxGeometry(xsize, ysize, zsize), mat);
     object.position.set(x, y, z);
@@ -439,6 +535,7 @@ lights.forEach(light => {
     if (light instanceof THREE.SpotLight) {
         const potLight = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), lightColour(0xffffff));
         potLight.position.copy(light.position);
+        potLight.userData.light = light;
         scene.add(potLight);
         potLights.push(potLight);
     }
@@ -446,21 +543,22 @@ lights.forEach(light => {
 window.addEventListener('resize', resizeRenderer);
 let keys = []
 let rot = false;
-let furnitureRot = 0;
+let staticsRot = 0;
 let toggle = false;
 let hue = 1
-let furnituret = 0
-let decorationt = 0
+let staticst = 0
+let motiont = 0
 document.addEventListener('keydown', (e) => {
-    keys[e.key] = true;
-    if(e.key === 'r') {
-        if (obj === 'furniture' || obj === 'decoration') {
-            furnitureRot = (furnitureRot + 1) % 4;
+    const key = e.key.toLowerCase();
+    keys[key] = true;
+    if(key === 'r') {
+        if (obj === 'statics' || obj === 'motion') {
+            staticsRot = (staticsRot + 1) % 4;
         } else {
             rot = !rot;
         }
     }
-    if(e.key === ' ') {
+    if(key === ' ') {
         toggle = !toggle;
     }
     if(e.key === '1') {
@@ -482,39 +580,39 @@ document.addEventListener('keydown', (e) => {
         obj = 'window';
     }
     if (e.key === '7') {
-        obj = 'furniture';
+        obj = 'statics';
     }
     if (e.key === '8') {
-        obj = 'decoration';
+        obj = 'motion';
     }
     if (e.key === '9') {
         obj = 'delete';
     }
     if(e.key === ']') {
-        if(obj == 'furniture') {
-            furnituret = (furnituret + 1) % furnitures.length;
+        if(obj == 'statics') {
+            staticst = (staticst + 1) % statics.length;
         }
-        if(obj == 'decoration') {
-            decorationt = (decorationt + 1) % decorations.length;
+        if(obj == 'motion') {
+            motiont = (motiont + 1) % motion.length;
         }
     }
     if(e.key == '[') {
-        if(obj == 'furniture') {
-            furnituret = (furnituret - 1 + furnitures.length) % furnitures.length;
+        if(obj == 'statics') {
+            staticst = (staticst - 1 + statics.length) % statics.length;
         }
-        if(obj == 'decoration') {
-            decorationt = (decorationt - 1 + decorations.length) % decorations.length;
+        if(obj == 'motion') {
+            motiont = (motiont - 1 + motion.length) % motion.length;
         }
     }
-    if(e.key === 'q') {
+    if(key === 'q') {
         width += 0.5;
     }
-    if(e.key === 'e') {
+    if(key === 'e') {
         if(width > 0.5) {
             width -= 0.5;
         }
     }
-    if(e.key == 'l') {
+    if(key === 'l') {
         if (hue == 1) {
             const [h, s, v] = hexToHsl(colour2);
             hue = 0;
@@ -525,9 +623,16 @@ document.addEventListener('keydown', (e) => {
             colour2 = hslToHex(h, 100, v)
         }
     }
+    if(key === ',') {
+        camera.position.y += 3
+    }
+    if(key === '.') {
+        camera.position.y -= 3
+    }
 });
 document.addEventListener('keyup', (e) => {
-    keys[e.key] = false;
+    const key = e.key.toLowerCase();
+    keys[key] = false;
 });
 let colour3 = 0xffffff;
 function createSolid(x, y, z, xsize, ysize, zsize, hex, geometry = new THREE.BoxGeometry(xsize, ysize, zsize)) {
@@ -567,7 +672,7 @@ document.addEventListener('click', () => {
 
             const potLightMaterial = lightColour(colour3);
             potLightMaterial.depthWrite = false;
-            potLightMaterial.depthTest = false;
+            potLightMaterial.depthTest = true;
             const potLight = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), potLightMaterial);
             potLight.position.copy(pos);
             potLight.userData.baseColor = colour3;
@@ -682,16 +787,84 @@ document.addEventListener('click', () => {
             windowMesh.userData.baseColor = colour2;
             objects.push(windowMesh);
             scene.add(windowMesh);
-        } else if (obj === modes[6]/* furniture */) {} else if (obj === modes[7]/* decoration */) {} else if (obj === modes[8]/* delete */) {} else if (obj === modes[9]/* colourpicker */) {}
+        } else if (obj === modes[6]/* statics */) {
+            const type = statics[staticst] || 'chair';
+            const pos = getPlacementPosition('statics');
+            const adjustedPos = getStaticObjectPosition(type, pos);
+            const existing = findObjectAt(adjustedPos);
+
+            if (existing) {
+                if (existing.userData.deletePreview) {
+                    scene.remove(existing);
+                    const index = objects.indexOf(existing);
+                    if (index !== -1) objects.splice(index, 1);
+                    return;
+                }
+
+                setWallColour(existing, 0xff0000);
+                existing.userData.deletePreview = true;
+                return;
+            }
+
+            const mesh = createPlacedstatics(type, colour2);
+            if (!mesh) return;
+            mesh.position.copy(adjustedPos);
+            mesh.userData.type = type;
+            mesh.userData.placementPos = adjustedPos.clone();
+            mesh.userData.baseColor = colour2;
+            mesh.userData.deletePreview = false;
+            objects.push(mesh);
+            scene.add(mesh);
+        } else if (obj === modes[7]/* motion */) {
+            const pos = getPlacementPosition('motion');
+            const existing = findObjectAt(pos);
+
+            if (existing) {
+                if (existing.userData.deletePreview) {
+                    scene.remove(existing);
+                    const index = objects.indexOf(existing);
+                    if (index !== -1) objects.splice(index, 1);
+                    return;
+                }
+
+                setWallColour(existing, 0xff0000);
+                existing.userData.deletePreview = true;
+                return;
+            }
+
+            const material = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.3, roughness: 0.7, transparent: false});
+            const deco = makemotionMesh(motion[motiont], material);
+            deco.position.copy(pos);
+            deco.userData.baseColor = colour2;
+            deco.userData.deletePreview = false;
+            objects.push(deco);
+            scene.add(deco);
+        } else if (obj === modes[8]/* delete */) {
+            const pos = getPlacementPosition(obj);
+            const existing = findObjectAt(pos, 0.35);
+            if (existing) {
+                scene.remove(existing);
+                const index = objects.indexOf(existing);
+                if (index !== -1) objects.splice(index, 1);
+            }
+        } else if (obj === modes[9]/* colourpicker */) {
+            const pos = getPlacementPosition(obj);
+            const existing = findObjectAt(pos);
+            if (existing && existing.material && existing.material.color) {
+                colour2 = existing.material.color.getHex();
+            }
+        }
     }
 });
-let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'furniture', 'decoration', 'delete', 'colourpicker'];
-let furnitures = ['chair', 'table', 'sofa', 'bed', 'cabinet', 'shelf', 'desk', 'lamp', 'rug', 'piano', 'wardrobe', 'bookshelf', 'stool', 'bench'];
-let decorations = ['poster', 'clock', 'vase', 'candle', 'curtain'];
+let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'statics', 'motion', 'delete', 'colourpicker'];
+let statics = ['chair', 'table', 'stair', 'bench', 'stool', 'rug', 'lamp', 'sofa', 'bed', 'bookshelf', 'poster', 'vase', 'curtain'];
+let motion = ['cabinet', 'shelf', 'desk', 'piano', 'wardrobe', 'clock', 'candle', ];
+preloadstaticsModel('stair', './models/stair.glb', { x: 1, y: 0.75, z: 1});
+preloadstaticsModel('chair', './models/chair.glb', { x: 0.7, y: 0.7, z: 0.7 });
+preloadstaticsModel('table', './models/table.glb', { x: 1, y: 0.6, z: 1 });
 let time = Date.now();
 document.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    console.log('Right click detected');
     state = (state + 1) % modes.length;
     obj = modes[state];
 });
@@ -716,11 +889,17 @@ document.addEventListener('wheel', (e) => {
         colour2 = hslToHex(h, 0, newLevel);
     }
 });
-let sens = 5;
+let sens = 1;
+camera.position.y = 1.6
 function animate() {
     requestAnimationFrame(animate);
-    scene.remove(...ghosts);
-    ghosts.pop();
+    updatePotLightVisibility();
+    updateGhostLightVisibility();
+
+    while (ghosts.length > 0) {
+        const ghost = ghosts.pop();
+        scene.remove(ghost);
+    }
 
     if (!toggle) {
         objects.forEach((object) => {
@@ -767,7 +946,6 @@ function animate() {
     if(toggle) {
         ghostObject();
     }
-    camera.position.y = 1.6;
     renderer.render(scene, camera);
 }
 animate();
