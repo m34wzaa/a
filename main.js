@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 30);
-const fog = new THREE.FogExp2(0x222222, 0.1)
+const dist2 = 1000;
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, dist2);
+const fog = new THREE.FogExp2(0x222222, 0.00)
 scene.fog = fog
 camera.position.z = 5;
 const renderer = new THREE.WebGLRenderer();
@@ -14,7 +15,7 @@ function resizeRenderer() {
     const height = window.innerHeight;
     camera.aspect = width2 / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(width2, height, false);
+    renderer.setSize(width2, height);
 }
 resizeRenderer();
 document.body.appendChild(renderer.domElement);
@@ -183,7 +184,7 @@ function createFallbackstaticsMesh(material, size = 0.8) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(
         new THREE.BoxGeometry(size, size, size),
-        material || new THREE.MeshStandardMaterial({ color: 0xffffff })
+        material || new THREE.MeshPhongMaterial({ color: 0xffffff })
     );
     body.position.y = size / 2;
     group.add(body);
@@ -198,25 +199,23 @@ function applyGhostMaterial(object, color) {
         const material = Array.isArray(meshMaterial)
             ? meshMaterial.map((entry) => {
                 if (!entry || !entry.color) return entry;
-                return new THREE.MeshStandardMaterial({
+                return new THREE.MeshPhongMaterial({
                     color,
                     emissive: color,
                     emissiveIntensity: 0.15,
                     transparent: true,
                     opacity: 0.6,
-                    metalness: 0.2,
-                    roughness: 0.8,
+                    shininess: 25,
                     depthWrite: false,
                 });
               })
-            : new THREE.MeshStandardMaterial({
+            : new THREE.MeshPhongMaterial({
                 color,
                 emissive: color,
                 emissiveIntensity: 0.15,
                 transparent: true,
                 opacity: 0.6,
-                metalness: 0.2,
-                roughness: 0.8,
+                shininess: 25,
                 depthWrite: false,
               });
 
@@ -246,11 +245,6 @@ function preloadstaticsModel(type, url, scale = 1) {
         url,
         (gltf) => {
             const model = gltf.scene;
-            model.traverse((child) => {
-                if (child.isMesh) {
-                    child.frustumCulled = false;
-                }
-            });
 
             model.userData.scale = normalizedScale;
             model.scale.set(normalizedScale.x, normalizedScale.y, normalizedScale.z);
@@ -258,8 +252,8 @@ function preloadstaticsModel(type, url, scale = 1) {
         },
         undefined,
         (error) => {
-            console.warn(`Could not preload ${type}:`, error);
-            const fallback = createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color: 0xffffff }), 0.8);
+            console.warn(`could not preload ${type}:`, error);
+            const fallback = createFallbackstaticsMesh(new THREE.MeshPhongMaterial({ color: 0xffffff }), 0.8);
             fallback.userData.scale = normalizedScale;
             staticsLibrary[type] = fallback;
         }
@@ -270,14 +264,13 @@ function applystaticsMaterial(object, color, ghost = false) {
     object.traverse((child) => {
         if (!child.isMesh) return;
 
-        const nextMaterial = new THREE.MeshStandardMaterial({
+        const nextMaterial = new THREE.MeshPhongMaterial({
             color,
             emissive: ghost ? color : 0x000000,
             emissiveIntensity: ghost ? 0.2 : 0,
             transparent: ghost,
             opacity: ghost ? 0.55 : 1,
-            metalness: 0.3,
-            roughness: 0.7,
+            shininess: 45,
             depthWrite: !ghost,
         });
 
@@ -300,7 +293,7 @@ function clonestaticsModel(type, color, ghost = false) {
 function createstaticsGhost(type, color, position) {
     const ghost = clonestaticsModel(type, color, true);
     if (!ghost) {
-        return createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color }), 0.8);
+        return createFallbackstaticsMesh(new THREE.MeshPhongMaterial({ color }), 0.8);
     }
 
     ghost.position.copy(position);
@@ -320,7 +313,7 @@ function makestaticsMesh(type, mat) {
 function createPlacedstatics(type, color) {
     const model = clonestaticsModel(type, color, false);
     if (model) return model;
-    return createFallbackstaticsMesh(new THREE.MeshStandardMaterial({ color }), type === 'table' ? 1.1 : 0.8);
+    return createFallbackstaticsMesh(new THREE.MeshPhongMaterial({ color }), type === 'table' ? 1.1 : 0.8);
 }
 function makemotionMesh(type, mat) {
     const deco = new THREE.Group();
@@ -356,7 +349,7 @@ function ghostObject() {
         const pos = getPlacementPosition('wall');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(getWallGeometry(), ghostMaterial);
         ghost.position.copy(pos);
@@ -368,7 +361,7 @@ function ghostObject() {
         const pos = getPlacementPosition('light');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour3, metalness: 1, roughness: 0, emissive: colour3, emissiveIntensity: 1, transparent: true, opacity: 0.5, depthTest: true });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour3, shininess: 90, emissive: colour3, emissiveIntensity: 1, transparent: true, opacity: 0.5, depthTest: true });
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 32), ghostMaterial);
         ghost.position.copy(pos);
@@ -380,7 +373,7 @@ function ghostObject() {
         const pos = getPlacementPosition('floor');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(getFloorGeometry(), ghostMaterial);
         ghost.position.copy(pos);
@@ -392,7 +385,7 @@ function ghostObject() {
         const pos = getPlacementPosition('ceiling');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         ghostMaterial.depthWrite = false;
         const ghost = new THREE.Mesh(getCeilingGeometry(), ghostMaterial);
         ghost.position.copy(pos);
@@ -404,7 +397,7 @@ function ghostObject() {
         const pos = getPlacementPosition('door');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         ghostMaterial.depthWrite = false;
         const ghost = createDoorMesh(ghostMaterial);
         ghost.position.copy(pos);
@@ -416,7 +409,7 @@ function ghostObject() {
         const pos = getPlacementPosition('window');
         if (objectExistsAt(pos)) return;
 
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         ghostMaterial.depthWrite = false;
         const ghost = createWindowMesh(ghostMaterial);
         ghost.position.copy(pos);
@@ -433,12 +426,13 @@ function ghostObject() {
         const ghost = createstaticsGhost(type, colour2, pos);
         ghost.position.copy(adjustedPos);
         ghost.userData.placementPos = adjustedPos.clone();
+        ghost.position.y += poss[type] ?? 0;
         ghosts.push(ghost);
         scene.add(ghost);
     } else if (obj === 'motion') {
         const pos = getPlacementPosition('motion');
         if (objectExistsAt(pos)) return;
-        const ghostMaterial = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
+        const ghostMaterial = new THREE.MeshPhongMaterial({ color: colour2, shininess: 35, transparent: true, opacity: 0.8, emissive: colour2, emissiveIntensity: 0.02 });
         const ghost = makemotionMesh(motion[motiont], ghostMaterial);
         ghost.position.copy(pos);
         ghosts.push(ghost);
@@ -448,7 +442,7 @@ function ghostObject() {
 
 }
 function colour(hex) {
-    return new THREE.MeshStandardMaterial({ color: hex, metalness: 0.5, roughness: 1 });
+    return new THREE.MeshPhongMaterial({ color: hex, shininess: 60 });
 }
 //stack overflow my beloved
 function hexToHsl(hex) {
@@ -474,7 +468,7 @@ function hslToHex(h, s, l) {
 }
 
 function lightColour(hex) {
-    return new THREE.MeshStandardMaterial({ color: hex, metalness: 1, roughness: 0, emissive: hex, emissiveIntensity: 1, depthTest: true, depthWrite: false });
+    return new THREE.MeshPhongMaterial({ color: hex, shininess: 90, emissive: hex, emissiveIntensity: 1, depthTest: true, depthWrite: false });
 }
 
 function updatePotLightVisibility() {
@@ -623,11 +617,34 @@ document.addEventListener('keydown', (e) => {
             colour2 = hslToHex(h, 100, v)
         }
     }
+    if(key === 'm') {
+        let [h, s, v] = hexToHsl(colour2)
+        if(hue == 1) {
+            console.log('hue')
+            return;
+        } else {
+            v = v == 100 ? 0 : v == 0 ? 50 : 100
+            console.log(h, s, v)
+            colour2 = hslToHex(h, s, v)
+        }
+    }
     if(key === ',') {
         camera.position.y += 3
     }
     if(key === '.') {
         camera.position.y -= 3
+    }
+    if (key === `z`) {
+        camera.position.y += 0.1875
+    }
+    if (key === 'x') {
+        camera.position.y -= 0.1875
+    }
+    if (key === 'c') {
+        sens -= 1
+    }
+    if (key === 'v') {
+        sens += 1
     }
 });
 document.addEventListener('keyup', (e) => {
@@ -636,7 +653,7 @@ document.addEventListener('keyup', (e) => {
 });
 let colour3 = 0xffffff;
 function createSolid(x, y, z, xsize, ysize, zsize, hex, geometry = new THREE.BoxGeometry(xsize, ysize, zsize)) {
-    const material = new THREE.MeshStandardMaterial({ color: hex, metalness: 0.5, roughness: 1 });
+    const material = new THREE.MeshPhongMaterial({ color: hex, shininess: 60 });
     const object = new THREE.Mesh(geometry, material);
     object.position.set(x, y, z);
     object.userData.deletePreview = false;
@@ -645,6 +662,22 @@ function createSolid(x, y, z, xsize, ysize, zsize, hex, geometry = new THREE.Box
     scene.add(object);
     return object;
 }
+const poss = {
+    chair: 0,
+    table: 0,
+    stair: -0.3,
+    stairs: -0.4,
+    bench: 0,
+    stool: 0,
+    rug: 0,
+    lamp: 0,
+    sofa: 0,
+    bed: 0,
+    bookshelf: 0,
+    poster: 0,
+    vase: 0,
+    curtain: 0,
+};
 document.addEventListener('click', () => {
     document.body.requestPointerLock();
     if (toggle) {
@@ -760,7 +793,7 @@ document.addEventListener('click', () => {
                 return;
             }
 
-            const door = createDoorMesh(new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1 }));
+            const door = createDoorMesh(new THREE.MeshPhongMaterial({ color: colour2, shininess: 60 }));
             door.position.copy(pos);
             door.userData.baseColor = colour2;
             objects.push(door);
@@ -782,7 +815,7 @@ document.addEventListener('click', () => {
                 return;
             }
 
-            const windowMesh = createWindowMesh(new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.5, roughness: 1 }));
+            const windowMesh = createWindowMesh(new THREE.MeshPhongMaterial({ color: colour2, shininess: 60 }));
             windowMesh.position.copy(pos);
             windowMesh.userData.baseColor = colour2;
             objects.push(windowMesh);
@@ -813,6 +846,7 @@ document.addEventListener('click', () => {
             mesh.userData.placementPos = adjustedPos.clone();
             mesh.userData.baseColor = colour2;
             mesh.userData.deletePreview = false;
+            mesh.position.y += poss[type] ?? 0;
             objects.push(mesh);
             scene.add(mesh);
         } else if (obj === modes[7]/* motion */) {
@@ -832,7 +866,7 @@ document.addEventListener('click', () => {
                 return;
             }
 
-            const material = new THREE.MeshStandardMaterial({ color: colour2, metalness: 0.3, roughness: 0.7, transparent: false});
+            const material = new THREE.MeshPhongMaterial({ color: colour2, shininess: 45, transparent: false});
             const deco = makemotionMesh(motion[motiont], material);
             deco.position.copy(pos);
             deco.userData.baseColor = colour2;
@@ -857,11 +891,12 @@ document.addEventListener('click', () => {
     }
 });
 let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'statics', 'motion', 'delete', 'colourpicker'];
-let statics = ['chair', 'table', 'stair', 'bench', 'stool', 'rug', 'lamp', 'sofa', 'bed', 'bookshelf', 'poster', 'vase', 'curtain'];
+let statics = ['chair', 'table', 'stair', 'stairs', 'bench', 'stool', 'rug', 'lamp', 'sofa', 'bed', 'bookshelf', 'poster', 'vase', 'curtain'];
 let motion = ['cabinet', 'shelf', 'desk', 'piano', 'wardrobe', 'clock', 'candle', ];
-preloadstaticsModel('stair', './models/stair.glb', { x: 1, y: 0.75, z: 1});
-preloadstaticsModel('chair', './models/chair.glb', { x: 0.7, y: 0.7, z: 0.7 });
-preloadstaticsModel('table', './models/table.glb', { x: 1, y: 0.6, z: 1 });
+preloadstaticsModel('stair', './models/stair.glb',   { x: 1, y: 0.75, z: 1});
+preloadstaticsModel('chair', './models/chair.glb',   { x: 0.7, y: 0.7, z: 0.7 });
+preloadstaticsModel('table', './models/table.glb',   { x: 1, y: 0.6, z: 1 });
+preloadstaticsModel('stairs', './models/stairs.glb', { x: 1, y: 0.75, z: 1})
 let time = Date.now();
 document.addEventListener('contextmenu', (e) => {
     e.preventDefault();
