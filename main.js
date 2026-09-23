@@ -542,115 +542,6 @@ let toggle = false;
 let hue = 1
 let staticst = 0
 let motiont = 0
-document.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    keys[key] = true;
-    if(key === 'r') {
-        if (obj === 'statics' || obj === 'motion') {
-            staticsRot = (staticsRot + 1) % 4;
-        } else {
-            rot = !rot;
-        }
-    }
-    if(key === ' ') {
-        toggle = !toggle;
-    }
-    if(e.key === '1') {
-        obj = 'wall';
-    }
-    if(e.key === '2') {
-        obj = 'light';
-    }
-    if (e.key === '3') {
-        obj = 'floor';
-    }
-    if (e.key === '4') {
-        obj = 'ceiling';
-    }
-    if (e.key === '5') {
-        obj = 'door';
-    }
-    if (e.key === '6') {
-        obj = 'window';
-    }
-    if (e.key === '7') {
-        obj = 'statics';
-    }
-    if (e.key === '8') {
-        obj = 'motion';
-    }
-    if (e.key === '9') {
-        obj = 'delete';
-    }
-    if(e.key === ']') {
-        if(obj == 'statics') {
-            staticst = (staticst + 1) % statics.length;
-        }
-        if(obj == 'motion') {
-            motiont = (motiont + 1) % motion.length;
-        }
-    }
-    if(e.key == '[') {
-        if(obj == 'statics') {
-            staticst = (staticst - 1 + statics.length) % statics.length;
-        }
-        if(obj == 'motion') {
-            motiont = (motiont - 1 + motion.length) % motion.length;
-        }
-    }
-    if(key === 'q') {
-        width += 0.5;
-    }
-    if(key === 'e') {
-        if(width > 0.5) {
-            width -= 0.5;
-        }
-    }
-    if(key === 'l') {
-        if (hue == 1) {
-            const [h, s, v] = hexToHsl(colour2);
-            hue = 0;
-            colour2 = hslToHex(h, 0, v);
-        } else {
-            const [h,s,v] = hexToHsl(colour2)
-            hue = 1
-            colour2 = hslToHex(h, 100, v)
-        }
-    }
-    if(key === 'm') {
-        let [h, s, v] = hexToHsl(colour2)
-        if(hue == 1) {
-            console.log('hue')
-            return;
-        } else {
-            v = v == 100 ? 0 : v == 0 ? 50 : 100
-            console.log(h, s, v)
-            colour2 = hslToHex(h, s, v)
-        }
-    }
-    if(key === ',') {
-        camera.position.y += 3
-    }
-    if(key === '.') {
-        camera.position.y -= 3
-    }
-    if (key === `z`) {
-        camera.position.y += 0.1875
-    }
-    if (key === 'x') {
-        camera.position.y -= 0.1875
-    }
-    if (key === 'c') {
-        sens -= 1
-    }
-    if (key === 'v') {
-        sens += 1
-    }
-});
-document.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    keys[key] = false;
-});
 let colour3 = 0xffffff;
 function createSolid(x, y, z, xsize, ysize, zsize, hex, geometry = new THREE.BoxGeometry(xsize, ysize, zsize)) {
     const material = new THREE.MeshPhongMaterial({ color: hex, shininess: 60 });
@@ -678,8 +569,7 @@ const poss = {
     vase: 0,
     curtain: 0,
 };
-document.addEventListener('click', () => {
-    document.body.requestPointerLock();
+function place() {
     if (toggle) {
         if (obj === modes[1]) {
             const pos = getPlacementPosition('light');
@@ -889,6 +779,122 @@ document.addEventListener('click', () => {
             }
         }
     }
+}
+document.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    keys[key] = true;
+    if(key === 'r') {
+        if (obj === 'statics' || obj === 'motion') {
+            staticsRot = (staticsRot + 1) % 4;
+        } else {
+            rot = !rot;
+        }
+    }
+    if(key === ' ') {
+        toggle = !toggle;
+    }
+    if(e.key === '1') {
+        obj = 'wall';
+    }
+    if(e.key === '2') {
+        obj = 'light';
+    }
+    if (e.key === '3') {
+        obj = 'floor';
+    }
+    if (e.key === '4') {
+        obj = 'ceiling';
+    }
+    if (e.key === '5') {
+        obj = 'door';
+    }
+    if (e.key === '6') {
+        obj = 'window';
+    }
+    if (e.key === '7') {
+        obj = 'statics';
+    }
+    if (e.key === '8') {
+        obj = 'motion';
+    }
+    if (e.key === '9') {
+        obj = 'delete';
+    }
+    if(e.key === ']') {
+        if(obj == 'statics') {
+            staticst = (staticst + 1) % statics.length;
+        }
+        if(obj == 'motion') {
+            motiont = (motiont + 1) % motion.length;
+        }
+    }
+    if(e.key == '[') {
+        if(obj == 'statics') {
+            staticst = (staticst - 1 + statics.length) % statics.length;
+        }
+        if(obj == 'motion') {
+            motiont = (motiont - 1 + motion.length) % motion.length;
+        }
+    }
+    if(key === 'q') {
+        width += 0.5;
+    }
+    if(key === 'e') {
+        if(width > 0.5) {
+            width -= 0.5;
+        }
+    }
+    if(key === 'l') {
+        if (hue == 1) {
+            const [h, s, v] = hexToHsl(colour2);
+            hue = 0;
+            colour2 = hslToHex(h, 0, v);
+        } else {
+            const [h,s,v] = hexToHsl(colour2)
+            hue = 1
+            colour2 = hslToHex(h, 100, v)
+        }
+    }
+    if(key === 'm') {
+        let [h, s, v] = hexToHsl(colour2)
+        if(hue == 1) {
+            console.log('hue')
+            return;
+        } else {
+            v = v == 100 ? 0 : v == 0 ? 50 : 100
+            console.log(h, s, v)
+            colour2 = hslToHex(h, s, v)
+        }
+    }
+    if(key === ',') {
+        camera.position.y += 3
+    }
+    if(key === '.') {
+        camera.position.y -= 3
+    }
+    if (key === `z`) {
+        camera.position.y += 0.1875
+    }
+    if (key === 'x') {
+        camera.position.y -= 0.1875
+    }
+    if (key === 'c') {
+        sens -= 1
+    }
+    if (key === 'v') {
+        sens += 1
+    }
+    if (key === 'k') {
+        place()
+    }
+});
+document.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    keys[key] = false;
+});
+document.addEventListener('click', () => {
+    document.body.requestPointerLock();
+    place()
 });
 let modes = ['wall', 'light', 'floor', 'ceiling', 'door', 'window', 'statics', 'motion', 'delete', 'colourpicker'];
 let statics = ['chair', 'table', 'stair', 'stairs', 'bench', 'stool', 'rug', 'lamp', 'sofa', 'bed', 'bookshelf', 'poster', 'vase', 'curtain'];
@@ -981,6 +987,7 @@ function animate() {
     if(toggle) {
         ghostObject();
     }
+    document.getElementById("placement").innerHTML = obj
     renderer.render(scene, camera);
 }
 animate();

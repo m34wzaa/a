@@ -4,12 +4,39 @@
         <style>
             * {
                 overflow: hidden;
+                margin:0%;
+            }
+            #controls {
+                outline: 2%;
+                background-color: burlywood;
+                position:fixed;
+                text-align: center;
+                margin-top: 3px;
+                color:crimson;
             }
         </style>
         <title>idk what im actually doing im js winging it</title>
     </head>
     <body>
         <div id="crosshair" style="position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background-color: red; transform: translate(-50%, -50%);"></div>
+        <div id="controls">
+            <h2>
+            <details id="details"> 
+                <summary>hi</summary>
+                <h5>Movement</h5> <!-- movement -->
+                <h6>
+                    wasd to move <br>
+                    , and . to move up and down <br>
+                    space to enter / exit editor <br>
+                </h6>
+                <h2>Placement type:</h2> <!-- all types of placements -->
+                <h6>
+
+                </h6>
+                <h6 id="placement"></h6>
+            </details>
+            </h2>
+        </div>
         <script type="importmap">
             {
                 "imports": {
