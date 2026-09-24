@@ -303,13 +303,6 @@ function createstaticsGhost(type, color, position) {
     return ghost;
 }
 
-function makestaticsMesh(type, mat) {
-    const color = mat && mat.color ? mat.color.getHex() : 0xffffff;
-    const ghost = clonestaticsModel(type, color, true);
-    if (ghost) return ghost;
-    return createFallbackstaticsMesh(mat);
-}
-
 function createPlacedstatics(type, color) {
     const model = clonestaticsModel(type, color, false);
     if (model) return model;
@@ -441,9 +434,6 @@ function ghostObject() {
     }
 
 }
-function colour(hex) {
-    return new THREE.MeshPhongMaterial({ color: hex, shininess: 60 });
-}
 //stack overflow my beloved
 function hexToHsl(hex) {
     let r = (hex >> 16) & 0xff, g = (hex >> 8) & 0xff, b = hex & 0xff;
@@ -517,13 +507,6 @@ function updateGhostLightVisibility() {
         const isBlocked = intersects.some((hit) => hit.distance < distance - 0.05);
         ghost.visible = !isBlocked;
     });
-}
-
-function addObjects(x, y, z, xsize, ysize, zsize, mat) {
-    const object = new THREE.Mesh(new THREE.BoxGeometry(xsize, ysize, zsize), mat);
-    object.position.set(x, y, z);
-    objects.push(object);
-    scene.add(object);
 }
 lights.forEach(light => {
     if (light instanceof THREE.SpotLight) {
