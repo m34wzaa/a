@@ -4,59 +4,73 @@
         <style>
             * {
                 overflow: hidden;
-                margin:0%;
+                margin: 0;
+                box-sizing: border-box;
             }
+
+            html, body {
+                width: 100%;
+                height: 100%;
+            }
+
             #controls {
-                outline: 2%;
+                position: fixed;
+                z-index: 10;
                 background-color: burlywood;
-                position:fixed;
-                text-align: center;
+                text-align: left;
                 margin-top: 3px;
-                color:crimson;
+                color: crimson;
+                border: 2px solid crimson;
+                padding: 8px;
+                max-width: min(420px, 90vw);
+            }
+
+            #crosshair {
+                z-index: 11;
             }
         </style>
-        <title>idk what im actually doing im js winging it</title>
+        <title>wandering</title>
     </head>
     <body>
         <div id="crosshair" style="position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background-color: red; transform: translate(-50%, -50%);"></div>
         <div id="controls">
-            <h2>
+            <h3>
             <details id="details"> 
-                <summary>hi</summary>
+                <summary>kontrols</summary>
                 <h5>Movement</h5> <!-- movement -->
                 <h6>
-                    wasd to move
-                    mouse to look
-                    click to place
-                    space to enter editor
-                    r to rotate obj
-                    q and e to change size
-                    1 wall
-                    2 light
-                    3 floor
-                    4 ceiling
-                    5 door
-                    6 window
-                    7 static object
-                    [ prev obj
-                    ] next obj
-                    scroll to change colour
-                    l grayscale toggle
-                    m brightness (only when greyscale)
-                    , up 16 steps
-                    . down 16 steps
-                    z up 1 step
-                    x down 1 step
-                    c lower sensitivity
+                    wasd to move <br>
+                    mouse to look<br>
+                    click to place<br>
+                    space to enter editor<br>
+                    r to rotate obj<br>
+                    q and e to change size<br>
+                    1 wall<br>
+                    2 light<br>
+                    3 floor<br>
+                    4 ceiling<br>
+                    5 door<br>
+                    6 window<br>
+                    7 static object<br>
+                    [ prev obj<br>
+                    ] next obj<br>
+                    scroll to change colour<br>
+                    l grayscale toggle<br>
+                    m brightness (only when greyscale)<br>
+                    , up 16 steps<br>
+                    . down 16 steps<br>
+                    z up 1 step<br>
+                    x down 1 step<br>
+                    c lower sensitivity<br>
                     v higher sensitivity
                 </h6>
-                <h2>Placement type:</h2> <!-- all types of placements -->
-                <h6>
-
-                </h6>
-                <h6 id="placement"></h6>
             </details>
-            </h2>
+            <h2>Placement type:</h2> <!-- all types of placements -->
+            <h6>
+
+            </h6>
+            <h6 id="placement"></h6>
+            </h3>
         </div>
         <script type="importmap">
             {

@@ -10,6 +10,11 @@ camera.position.z = 5;
 const renderer = new THREE.WebGLRenderer();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.sortObjects = false;
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.zIndex = '0';
+renderer.domElement.style.display = 'block';
 function resizeRenderer() {
     const width2 = window.innerWidth;
     const height = window.innerHeight;
@@ -775,6 +780,7 @@ document.addEventListener('keydown', (e) => {
     }
     if(key === ' ') {
         toggle = !toggle;
+        document.title = toggle ? 'building' : 'wandering'
     }
     if(e.key === '1') {
         obj = 'wall';
