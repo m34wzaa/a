@@ -780,7 +780,6 @@ document.addEventListener('keydown', (e) => {
     }
     if(key === ' ') {
         toggle = !toggle;
-        document.title = toggle ? 'building' : 'wandering'
     }
     if(e.key === '1') {
         obj = 'wall';
@@ -920,9 +919,11 @@ document.addEventListener('wheel', (e) => {
     }
 });
 let sens = 1;
+let idleTime = 0
 camera.position.y = 1.6
 function animate() {
     requestAnimationFrame(animate);
+    idleTime++
     updatePotLightVisibility();
     updateGhostLightVisibility();
 
@@ -976,6 +977,11 @@ function animate() {
     if(toggle) {
         ghostObject();
     }
+    const gamnam = 'hi'
+    let action = toggle ? 'building' : 'wandering'
+    document.title = `${gamnam} - ${obj == 'delete' ? 'deleting' : action} ${
+        action == 'wandering' ? '' : modes.indexOf(obj) < 6 ? `a ${obj}` : obj == 'delete' ? '' : obj
+    }`
     document.getElementById("placement").innerHTML = obj
     renderer.render(scene, camera);
 }
