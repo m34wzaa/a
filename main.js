@@ -163,6 +163,22 @@ function findObjectAt(position, yTolerance = 0.5) {
 	return match;
 }
 
+function getDeleteTargetFromCrosshair() {
+	const raycaster = new THREE.Raycaster();
+	const pointer = new THREE.Vector2(0, 0);
+	raycaster.setFromCamera(pointer, camera);
+	const hits = raycaster.intersectObjects(objects, true);
+
+	if (!hits.length) return null;
+
+	let target = hits[0].object;
+	while (target && target !== scene && !objects.includes(target)) {
+		target = target.parent;
+	}
+
+	return target && objects.includes(target) ? target : null;
+}
+
 function setWallColour(object, hex) {
 	if (!object) return;
 
@@ -752,14 +768,19 @@ function place() {
 			objects.push(deco);
 			scene.add(deco);
 		} else if (obj === modes[8]/* delete */) {
-			for (i = 0; i > modes.length; i++) {}
-			const pos = getPlacementPosition(modes[0]);
-			const existing = findObjectAt(pos, 1); 
-			if (existing) {
-				scene.remove(existing);
-				const index = objects.indexOf(existing);
-				if (index !== -1) objects.splice(index, 1);
+			const existing = getDeleteTargetFromCrosshair();
+			if (!existing) return;
+			if (existing.userData.light) {
+				scene.remove(existing.userData.light);
+				const lightIndex = potLights.indexOf(existing);
+				if (lightIndex !== -1) potLights.splice(lightIndex, 1);
 			}
+			if (existing.userData.visual) {
+				scene.remove(existing.userData.visual);
+			}
+			scene.remove(existing);
+			const index = objects.indexOf(existing);
+			if (index !== -1) objects.splice(index, 1);
 		} else if (obj === modes[9]/* colourpicker */) {
 			const pos = getPlacementPosition(obj);
 			const existing = findObjectAt(pos);
@@ -769,6 +790,7 @@ function place() {
 		}
 	}
 }
+const raytracer = new THREE.Raycaster
 document.addEventListener('keydown', (e) => {
 	idleTime = 0
 	const key = e.key.toLowerCase();
@@ -887,7 +909,7 @@ document.addEventListener('keyup', (e) => {
 	idleTime = 0
 });
 document.addEventListener('click', () => {
-	if (mouseX > 35 || mouseY > 360) {
+	if (mouseX > 50 || mouseY > 390) {
 		document.body.requestPointerLock();
 	}
 	place()
@@ -906,7 +928,7 @@ document.addEventListener('contextmenu', (e) => {
 	obj = modes[state];
 });
 let mouseX, mouseY;
-//35, 360
+//50, 390
 document.addEventListener('mousemove', (e) => {
 	mouseX = e.clientX;
 	mouseY = e.clientY;
@@ -930,7 +952,10 @@ document.addEventListener('wheel', (e) => {
 		const newLevel = (l + (e.deltaY < 0 ? step : -step) + 100) % 100;
 		colour2 = hslToHex(h, 0, newLevel);
 	}
+	console.log(colour2)
+	document.getElementById('crosshair').style.backgroundColor = `#${(colour2 & 0xFFFFFF).toString(16).padStart(6, '0')}`;
 });
+document.getElementById('crosshair').style.backgroundColor = `#${(colour2 & 0xFFFFFF).toString(16).padStart(6, '0')}`;
 let sens = 1;
 let idleTime = 0
 let sprint = true
@@ -953,8 +978,13 @@ function animate() {
 			object.userData.deletePreview = false;
 		});
 	} else {
-		const targetPosition = getPlacementPosition(obj);
-		const targetObject = findObjectAt(targetPosition);
+		let targetObject = null;
+		if (obj === 'delete') {
+			targetObject = getDeleteTargetFromCrosshair();
+		} else {
+			const targetPosition = getPlacementPosition(obj);
+			targetObject = findObjectAt(targetPosition);
+		}
 
 		objects.forEach((object) => {
 			if (object.userData.deletePreview && (!targetObject || object !== targetObject)) {
@@ -998,8 +1028,10 @@ function animate() {
 	document.title = idleTime >= 3000 ? `${gamnam} - Idle` : `${gamnam} - ${obj == 'delete' ? 'deleting' : action} ${
 		action == 'wandering' ? '' : modes.indexOf(obj) < 6 ? `a ${obj}` : obj == 'delete' ? '' : obj
 	}`
-	document.getElementById("placement").innerHTML = obj
+	document.getElementById("placement").innerHTML = obj == modes[0] ? "Placing Walls" : obj == modes[1] ? "Placing Lights" : obj == modes[2] ? "Placing Floors" : obj == modes[3] ? "Placing Ceilings" : obj == modes[4] ? "Placing Doors" : obj == modes[5] ? "Placing Windows" : obj == modes[6] && statics[staticst] == 'chair' ? "Placing Chairs" : obj == modes[6] && statics[staticst] == 'table' ? "Placing Tables" : obj == modes[6] && (statics[staticst] == 'stair' || statics[staticst] == 'stairs') ? "Placing Stairs" : obj == modes[6] ? "i didnt maek these yet awawa" : obj == modes[7] ? "these just straight up dont work sry" : obj == modes[8] ? "Deleting" : obj == modes[9] ? "yea nah im too lazy for ts" : "this text shouldnt even be showing rn whaaaaa"
+	if (!toggle) document.getElementById("placement-type").style.display = 'none'; else document.getElementById("placement-type").style.display = 'block';
 	idleTime++
+
 	renderer.render(scene, camera);
 }
 animate();
