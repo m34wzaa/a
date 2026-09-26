@@ -957,9 +957,11 @@ document.addEventListener('wheel', (e) => {
 });
 document.getElementById('crosshair').style.backgroundColor = `#${(colour2 & 0xFFFFFF).toString(16).padStart(6, '0')}`;
 let sens = 1;
+let moveSpeed = 1;
 let idleTime = 0
 let sprint = true
 camera.position.y = 1.6
+keys['shift'] = false
 function animate() {
 	requestAnimationFrame(animate);
 	updatePotLightVisibility();
@@ -999,30 +1001,30 @@ function animate() {
 		}
 	}
 	sprint = false
-	if(keys['shift']) sprint = true;
-	let diag = .0707 / 2
+	if(keys['shift']) moveSpeed = 3; else moveSpeed = 1;
+	let diag = (.0707 / 2) * moveSpeed
 	if(keys['w']) {
 		const direction = new THREE.Vector3(0, 0, sprint ? -3 : -1).applyQuaternion(camera.quaternion);
 		direction.y = 0;
 		direction.normalize();
-		camera.position.add(((keys['a'] && !keys['d']) || keys['d'] && !keys['a'] ? direction.multiplyScalar(diag) : direction.multiplyScalar(0.05)));
+		camera.position.add(((keys['a'] && !keys['d']) || keys['d'] && !keys['a'] ? direction.multiplyScalar(diag) : direction.multiplyScalar(0.05 * moveSpeed)));
 	}
 	if(keys['s']) {
 		const direction = new THREE.Vector3(0, 0, sprint ? 3 : 1).applyQuaternion(camera.quaternion);
 		direction.y = 0;
 		direction.normalize();
-		camera.position.add(((keys['a'] && !keys['d']) || keys['d'] && !keys['a'] ? direction.multiplyScalar(diag) : direction.multiplyScalar(0.05)));
+		camera.position.add(((keys['a'] && !keys['d']) || keys['d'] && !keys['a'] ? direction.multiplyScalar(diag) : direction.multiplyScalar(0.05 * moveSpeed)));
 	}
 	if(keys['a']) {
-		camera.position.add((keys['w'] && !keys['s'] || keys['s'] && !keys['w'] ? new THREE.Vector3(-diag, 0, 0) : new THREE.Vector3(-0.05, 0, 0)).applyQuaternion(camera.quaternion));
+		camera.position.add((keys['w'] && !keys['s'] || keys['s'] && !keys['w'] ? new THREE.Vector3(-diag, 0, 0) : new THREE.Vector3(-0.05 * moveSpeed, 0, 0)).applyQuaternion(camera.quaternion));
 	}
 	if(keys['d']) {
-		camera.position.add((keys['w'] && !keys['s'] || keys['s'] && !keys['w'] ? new THREE.Vector3(diag, 0, 0) : new THREE.Vector3(0.05, 0, 0)).applyQuaternion(camera.quaternion));
+		camera.position.add((keys['w'] && !keys['s'] || keys['s'] && !keys['w'] ? new THREE.Vector3(diag, 0, 0) : new THREE.Vector3(0.05 * moveSpeed, 0, 0)).applyQuaternion(camera.quaternion));
 	}
 	if(toggle) {
 		ghostObject();
 	}
-	const gamnam = 'hi'
+	const gamnam = 'phantomful'
 	if (idleTime == 3000) console.log('You are now Idle');
 	let action = toggle ? 'building' : 'wandering'
 	document.title = idleTime >= 3000 ? `${gamnam} - Idle` : `${gamnam} - ${obj == 'delete' ? 'deleting' : action} ${
